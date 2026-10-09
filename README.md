@@ -1,9 +1,12 @@
 # Migrating from Mailchimp to Loops: field notes
 
-**How we tested, built, overhauled and went live** moving a membership organisation's
-email automation from Mailchimp to [Loops](https://loops.so) in 2026 — audience import,
-lifecycle journeys, landing pages and forms, and a live cutover of the new-member
-onboarding sequence without double-emailing anyone.
+From the team at [She's Independent Investments](https://shesindependent.com/), a
+women-first angel investing community.
+
+**How we tested, built, overhauled and went live** moving our email automation from
+Mailchimp to [Loops](https://loops.so) in 2026: audience import, lifecycle journeys,
+landing pages and forms, and a live cutover of our new-member onboarding sequence without
+double-emailing anyone.
 
 Almost everything here was learned by hitting it. Where a claim came from an experiment,
 the experiment is described, because several of these contradict the vendor documentation
@@ -581,6 +584,81 @@ stripped; check for a wired flag on the element instead.
 first; restoring is copying that meta back. Also prefer an **in-place swap** of the form
 element over drag-and-delete in the UI — an atomic replace can't leave the duplicate.
 
+### Rebuilding the pages, and what made it tractable
+
+We rebuilt three landing pages rather than port them. A few things made that far less work
+than expected, and one of them is worth being specific about.
+
+**Read the brand values off the old page's source, don't eyeball them.** We pulled the font
+family and weights plus six exact hex values - brand colour, body text, muted text, page
+background, borders - straight out of the original page rather than matching by eye. A
+screenshot gets you close and wrong.
+
+That pass also caught genuine brand drift: the old page's button was a *different* red from
+the brand red, close enough that nobody had noticed. The rebuild standardised it. **Reading
+the real values is how you find the places your brand has quietly diverged.**
+
+**Your old ESP's image CDN dies with the account.** Every asset was hosted on the previous
+tool's media domain. We downloaded all of them and re-hosted on the new ESP's CDN before
+cancelling anything. Check your pages, your templates and your emails - they all point
+there.
+
+**Flag derived assets as derived.** The dark hero needed a reversed logo, which didn't exist
+as a brand file. We generated one by inverting it, and marked it in the notes as awaiting
+sign-off rather than filing it with the official assets. (A naive white fill destroys a
+wordmark that's white letters inside a black bar - invert, don't recolour.)
+
+**Scope your CSS under a page-specific class.** Everything lives under one wrapper class per
+page, so nothing collides with theme or page-builder styles in either direction.
+
+**You may not need the page builder at all.** Each page is raw HTML in a single HTML block in
+`post_content` - no builder involvement. That works if your account allows unfiltered HTML,
+and it means the inline script survives. A full-width page template made the hero bleed
+edge-to-edge while keeping the site header and footer. Zero builder editing, and nothing for
+the builder's cache to stale.
+
+**Portrait photos fail as wide heroes.** A 780×1014 portrait used as a full-width hero crops
+the dimension that's relatively larger, which cut faces off. Swapped to a landscape shot with
+an explicit `background-position`. Your levers are hero height and background-position, and
+that's it - pick an image shaped for the slot.
+
+### What an AI agent was actually good for here
+
+Worth being concrete rather than enthusiastic, because the useful parts and the dangerous
+parts are both specific.
+
+**Where it genuinely collapsed the work:**
+
+- **Reading computed styles off the live page** to pixel-match a replacement form to the one
+  it replaced - button colour, font, border radius, input styling - instead of guessing and
+  iterating.
+- **Generating paste-ready HTML**, so rebuilding a page was a paste rather than an afternoon
+  in a page builder.
+- **Scanning the whole site for stale references in one pass** - 135 objects across posts,
+  pages, templates and popups, via the authenticated REST API. Nobody audits that by hand,
+  which is exactly why the footer and popup forms had been missed.
+- **Submitting the rendered form and reading the contact back** out of the new ESP, so
+  "verified" meant a real round trip rather than a 200 from a curl.
+- **The clone-to-draft test**, which is the technique we'd most reuse: to test a form whose
+  notification emails a real person, clone its container into a throwaway draft page with
+  the email action stripped, submit it for real, confirm the data landed, then delete the
+  contact, the submission record and the draft page. Full end-to-end coverage, nothing sent
+  to a human.
+
+**Where it needed a human, every time:**
+
+- It once declared a live brand page broken because animated counters read as `0` in a
+  headless browser - the values were in the DOM the whole time and the animation never
+  fired. One cheap read is not proof.
+- It ran a string replace against the wrong field, reported success, and changed nothing.
+- It trusted a `?cb=` cache-buster that doesn't bypass the page builder's render cache.
+- It cited a quote that turned out to be a paraphrase from an internal note, caught only
+  because the person it was attributed to didn't recognise their own words.
+
+The pattern: **fast and tireless at breadth - scanning, matching, verifying round trips.
+Confidently wrong at judgement, especially when a cheap signal happens to look conclusive.**
+Everything in the verification section of this document exists because of that asymmetry.
+
 ### Don't replace a form that does more than subscribe
 
 One of ours was a membership application: it emailed a real person **and** collected a long
@@ -652,6 +730,35 @@ workstreams before anyone wrote the list.
 - **No native campaign A/B.** Experiments are workflow-only, so if you relied on
   campaign-level A/B in your old tool, that capability doesn't port — plan a manual split
   (a random group property → two segments → two duplicate campaigns) or drop it.
+
+---
+
+## Sending domain and deliverability
+
+Easy to leave until last and then discover it gates everything.
+
+- **Expect about six DNS records**: an envelope/return-path record, SPF, three DKIM CNAMEs,
+  and a verification TXT. Ours went in at the host's DNS panel.
+- **Check whether you already have `_dmarc`.** Ours existed and already matched what the new
+  ESP wanted, so it was left alone. Don't overwrite a working DMARC record.
+- **Your transactional/business mail is separate.** Adding the new ESP's records didn't touch
+  the Google Workspace mail flow at all - worth confirming rather than assuming.
+- **The old ESP's SPF include stays until you cancel.** Ours still had the previous tool's
+  include in the root SPF record while both systems were live. Remove it *after*
+  cancellation, not before.
+- **Prove one real send to a real inbox** before trusting anything - we duplicated a finished
+  campaign into a throwaway, locked its audience to a single-recipient segment, and sent it.
+  One send, one open, zero bounces, zero spam reports. Which brings up the trap: **never point
+  a finished campaign at a test recipient**, because publishing spends it.
+
+### Asset hosting
+
+- **Images must live on the new ESP's CDN** - external URLs are rejected outright in email
+  content.
+- There are size limits (ours: 4MB per upload, 100KB total email payload). Resize before
+  uploading rather than discovering the ceiling mid-build.
+- Fonts are restricted to what the tool supports. Pick the closest match to your brand font
+  and give every face a real fallback stack.
 
 ---
 
