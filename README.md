@@ -21,6 +21,31 @@ have changed since late 2026.
 
 ---
 
+## Start here
+
+If you're planning a migration rather than debugging one, read in this order:
+
+1. **[The scaffolding](#the-scaffolding-how-we-worked-not-just-what-we-built)** — set this up
+   *before* you build anything. It's the part we'd do first if we did this again, and the
+   part we actually did last.
+2. **[Events fire automations, properties are data](#the-one-thing-to-understand-first)** —
+   get this wrong and an import emails your whole list.
+3. **[A success response is not evidence](#-a-success-response-is-not-evidence-of-effect)** —
+   the verification discipline that caught five of our six cutover-day bugs.
+4. **[Data modelling](#data-modelling-one-fact-one-field)** — decide your property register
+   before you write templates against it.
+5. **[The cutover](#the-cutover-moving-a-live-sequence-without-double-emailing)** and the
+   **[pre-flight checklist](#pre-flight-checklist)** when you're ready to go live.
+
+Everything else is reference for when you hit the specific thing.
+
+**You don't have to migrate everything at once.** We moved supporter onboarding first, then
+member onboarding three months later, and left prospect nurture on the old tool entirely.
+Each lane cut over independently, which meant each one was a small, reversible change
+instead of one large irreversible one.
+
+---
+
 ## The one thing to understand first
 
 ### Events fire automations. Properties are data. Never mix them.
