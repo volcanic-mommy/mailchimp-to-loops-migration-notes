@@ -661,6 +661,48 @@ workstreams before anyone wrote the list.
 
 ---
 
+## Early results (one send in — read with care)
+
+We are one newsletter into Loops, so this is directional, not a finding. Recording it
+because "did it actually help?" is the first thing anyone asks.
+
+**Click-through is materially higher.** Our Mailchimp sends with working click tracking
+clustered around **3–5%** (median ≈4.8% across a dozen sends; range 2.4–15.9%). The first
+Loops newsletter came in at **9.5%** — and that was measured **26 hours after send**, still
+accumulating.
+
+**Open rate looks like a wash, trending favourable.** 47.0% at 26 hours against a pooled
+Mailchimp baseline of 48.7% across 12 comparable sends (range 41.5–54.0%) — but those
+baselines are fully matured and ours wasn't, so like-for-like it is at or slightly above.
+
+Caveats that matter if you're going to quote this:
+
+- **n = 1 campaign.** One send cannot establish a trend in either direction.
+- **26 hours of accumulation** vs months. Both metrics were still climbing.
+- **Same audience, roughly same size** (~2,100 → 2,166), which is the one thing that *is*
+  clean about the comparison.
+- **New content, new template.** A rebuilt email is a confound. Some of any improvement is
+  the rebuild, not the platform.
+
+### A reporting trap worth knowing about
+
+Our Mailchimp click data was quietly broken for months, and it took writing this up to
+notice.
+
+Every monthly newsletter from February onward was an **A/B (variate) campaign**. The parent
+report for a variate campaign carries opens but reports **0.00% clicks** — the real figures
+live in the per-combination stats, which the API does not expose (`variate_settings` comes
+back empty, and `click-details` returns no URL data).
+
+So the dashboard showed near-zero clicks on nine consecutive monthly sends. That makes any
+new platform look like a miracle by comparison, and it's the reason our first instinct about
+the size of the improvement was wrong.
+
+**Before you claim a migration improved anything, check that your old tool's numbers were
+ever being recorded properly.** Ours weren't, for the exact metric we most wanted to compare.
+
+---
+
 ## The scaffolding: how we worked, not just what we built
 
 A migration like this runs for months, across several parallel workstreams, against systems
