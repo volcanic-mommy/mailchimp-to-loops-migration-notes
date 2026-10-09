@@ -21,6 +21,21 @@ have changed since late 2026.
 
 ---
 
+## Why this exists
+
+We couldn't find an honest account of what actually breaks when you move an ESP. The vendor
+docs describe the happy path; several things in here contradict them outright, and the rest
+simply aren't written down anywhere.
+
+The expensive mistakes weren't technical. They were a success response that meant nothing, a
+stale note treated as fact, and a marker field chosen by reasoning instead of by checking
+real contacts. None of those show up in a feature comparison.
+
+So: written down while it was fresh, sanitised, and free to use. If it saves you one
+double-send to your whole list, it was worth writing.
+
+---
+
 ## Start here
 
 If you're planning a migration rather than debugging one, read in this order:
