@@ -1,16 +1,20 @@
 # Migrating from Mailchimp to Loops: field notes
 
-Written after moving a membership organisation's email automation from Mailchimp to
-[Loops](https://loops.so) over mid-2026 — audience import, lifecycle journeys, and a live
-cutover of the new-member onboarding sequence without double-emailing anyone.
+**How we tested, built, overhauled and went live** moving a membership organisation's
+email automation from Mailchimp to [Loops](https://loops.so) in 2026 — audience import,
+lifecycle journeys, landing pages and forms, and a live cutover of the new-member
+onboarding sequence without double-emailing anyone.
 
 Almost everything here was learned by hitting it. Where a claim came from an experiment,
-the experiment is described, because several of these contradict the documentation or
-aren't in it at all.
+the experiment is described, because several of these contradict the vendor documentation
+or aren't in it at all.
 
-**Scope.** This is strongest on **journeys/automations, contact data modelling, and
-cutover mechanics** — the parts where a mistake emails real people. It's lighter on
-templates and deliverability.
+**Scope.** This is about **migration and build mechanics** — data modelling, automation
+wiring, verification, and cutover sequencing. The parts where a mistake emails real people.
+
+It is deliberately **not** about copywriting, send timing or campaign optimisation. Those
+are worth getting right, but they're the same problem in any tool and they're not what
+makes a migration go wrong.
 
 **Not affiliated with Loops.** No warranty; verify against your own account. Behaviour may
 have changed since late 2026.
@@ -404,20 +408,6 @@ access links, and an alternative block for the not-yet-paid case.
 That's the kind of thing worth adding during a rebuild — the old tool could have done it,
 but nobody was going to touch a working journey just for it.
 
-### Fix the subject lines, and know which lever matters
-
-Across five A/B tests on the same list, **specific and first-person subject lines beat
-thematic or abstract ones every time**, with gaps up to **+33 percentage points** on opens.
-Winners read like "What I've been building. What's next."; losers like "Updates from the lab,
-the calendar, and the mat."
-
-For comparison, the best send-time difference we ever measured was **8.5pp**. **If you only
-get one test, test subject lines.**
-
-We also fixed an internal inconsistency: the sequence used the organisation's full name for
-two emails then switched to its shorthand from the third onward. Moving the switch one email
-earlier made it read as one voice.
-
 ### Match the old tool's visual rhythm deliberately
 
 Loops rendered paragraphs noticeably tighter than Mailchimp did. Rather than eyeball each
@@ -430,82 +420,11 @@ zero** of the standard padding.
 
 ### Small content decisions that came from our data
 
-- **No greeting line.** Our first-name capture was patchy, so "Hi {firstName}," would have
-  read badly for a meaningful slice. Omitting it entirely beat a fallback.
-- **Give every image a link.** Clickable images measurably drive engagement, and it costs
-  one attribute.
+- **Your imported data constrains your templates.** Our first-name capture was patchy, so
+  a greeting line would have read badly for a meaningful slice of the audience — we dropped
+  it rather than lean on a fallback. Audit the fields your templates want to merge *before*
+  writing templates around them.
 - **Let the tool append its own unsubscribe footer** — don't hand-build one.
-
-### Send timing: trust within-campaign splits, distrust averages
-
-Our one clean experiment — same content, same audience, split only by send time — had the
-later-in-day send win on both opens (59.1% vs 50.6%) and clicks (3.4% vs 2.1%).
-
-Meanwhile two auto-generated "best day to send" analytics files in the same repo
-**disagreed with each other**, because both averaged across campaigns with different content
-and audiences. They were measuring content, not timing. One also reported a "best hour"
-computed as the *mean of clock timestamps* across campaigns, which is meaningless.
-
-**Know your minimum detectable effect before you split.** At a ~55% baseline open rate,
-~385 recipients per arm needs a **>7pp** gap to call a winner. Splitting a small list spends
-a send on a test that cannot conclude.
-
-### A cheap win: the non-opener follow-up
-
-Duplicate the campaign, send it to people who didn't open the first one, and use the
-**A/B subject variant that lost** — it's already written and this audience hasn't seen it.
-
----
-
-## Data modelling: one fact, one field
-
-Bulk imports from a tag-based system tend to produce redundant properties, because tags are
-flat and properties aren't. We ended up with:
-
-- `activeMember` (boolean) **and** `memberStatus` (string: active/churned/pending-churn)
-- `intakeComplete` (boolean) **and** `needsIntakeForm` (boolean) — exact inverses
-
-Pick **one canonical field per fact** and treat the others as read-only legacy. Two fields
-meaning the same thing will disagree eventually, and the one your email templates read will
-be the stale one. We had already lived through exactly that in Mailchimp: a merge field
-that quietly stopped being written, so a "you haven't completed your form" reminder went to
-people who had.
-
-Prefer the field with more states — a three-state string beats a boolean that can't express
-the middle case.
-
-### Name discipline
-
-Agree a property register **before** the migration and add to it deliberately. Ours drifted
-within weeks because different workstreams invented names for the same idea. A single
-written list of valid field names and valid values, with a rule that nothing gets invented
-without being added there first, costs nothing and prevents a genuinely annoying class of
-bug — segments that silently match nobody.
-
-One deliberate inconsistency worth tolerating: if your old system's tag was `founders` and
-your new property is `founder`, don't "fix" either. Record that they're the same thing in
-two systems and move on.
-
-### Separate "what they bought" from "what they get"
-
-Our sharpest modelling mistake. A household/couple plan is **one product** covering **two
-people**, and those people can be at different service levels. We'd mapped the product
-name straight into the field our emails branch on, so:
-
-- content conditionals couldn't match either person correctly
-- both people landed in the same access group regardless of their actual level
-
-Splitting it fixed everything:
-
-| axis | field | notes |
-|---|---|---|
-| what they bought | billing product | drives checkout links, receipts, the signup form they filled |
-| what they get | service level, **per person** | drives email content and access |
-| group identity | a separate "plan type" field | recorded for segmentation, **never branched on** |
-
-If you have any multi-seat, household, or family plan, check whether your per-person level
-is actually captured anywhere. Ours was being collected on the signup form the whole time
-and simply never mapped.
 
 ---
 
@@ -655,10 +574,9 @@ workstreams before anyone wrote the list.
 - `--schedule-at <ISO8601>` is the better pattern than "send now": set the time, publish
   once, it fires then.
 - **Lock a test send to one recipient with a saved segment**, never an ad-hoc guess.
-- **No native campaign A/B.** Experiments are workflow-only. For a one-off campaign the
-  only route is a manual split: a random group property → two segments → two duplicate
-  campaigns. Assign that group **randomly** — splitting on engagement or alphabetically
-  confounds the test with the thing you're measuring.
+- **No native campaign A/B.** Experiments are workflow-only, so if you relied on
+  campaign-level A/B in your old tool, that capability doesn't port — plan a manual split
+  (a random group property → two segments → two duplicate campaigns) or drop it.
 
 ---
 
