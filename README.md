@@ -381,6 +381,41 @@ journeys would have been five-sixths duplication, with five-sixths of the future
 One journey, one trigger event, and tier differences handled by conditional sections. If you
 find yourself with more than a couple of conditionals, revisit — but count first.
 
+### What our journeys actually look like
+
+Real shapes, in case it's useful to see what came out the other end. Three live journeys,
+each with a different trigger type:
+
+| journey | trigger | shape |
+|---|---|---|
+| **Newsletter welcome** | add-to-list (one-time) | gate filter → **branch** → two tracks: **7 emails / 45 days** and **5 emails / 24 days** |
+| **New member onboarding** | event, one-time | guard filter → **6 emails / 33 days**, one conditional block inside one email |
+| **Supporter onboarding** | event, one-time | **2 emails / 7 days** |
+
+The newsletter welcome is the interesting one, because it shows the two-track pattern:
+
+```
+AddToListTrigger  (one-time per contact)
+ └─ AudienceFilter            ← gate: does this person belong here at all?
+     └─ BranchNode
+         ├─ AudienceFilter → 7 emails, 5/5/7/7/7/14-day gaps     (general audience)
+         └─ AudienceFilter → 5 emails, 5/5/7/7-day gaps          (founders)
+```
+
+A branch with a filter on each arm is how you get mutually exclusive tracks out of a tool
+whose conditionals can't express AND. It's also the shape to reach for **instead of**
+duplicating a whole journey per audience — one trigger, one place to change the entry
+conditions, and the arms only hold what genuinely differs.
+
+Three deliberate choices in there:
+
+- **The gate filter sits before the branch**, so "should this person be here at all" is
+  answered once rather than repeated on every arm.
+- **Cadence front-loads.** Both tracks start at 5-day gaps and widen to 7 and 14. The early
+  emails do the work; the later ones are maintenance.
+- **Different lengths per track.** The founder track is shorter because it had less to say,
+  not because it was cut short. Resist making arms symmetrical for tidiness.
+
 ### Audit the old sequence for defects before porting it
 
 Don't port faithfully; port deliberately. Ours had a conditional showing "your form isn't
@@ -598,6 +633,133 @@ workstreams before anyone wrote the list.
   membership on a sample after importing, not just contact count.
 - There was **no contacts-count endpoint**; per-email lookup only. Confirm audience sizes in
   the UI before publishing anything.
+
+---
+
+## The scaffolding: how we worked, not just what we built
+
+A migration like this runs for months, across several parallel workstreams, against systems
+that have exactly one live state. Most of what went wrong was a *coordination* failure
+rather than a technical one — a decision made in one conversation and unknown in the next, a
+stale note treated as fact, a "quick check" that answered confidently and wrongly.
+
+The scaffolding below is what we ended up with. It's tool-agnostic and it's the part we'd
+set up **first** if we did this again.
+
+### A written constitution, with receipts
+
+One file of standing rules, loaded automatically into every working session, plus a set of
+longer protocol documents it summarises. The structure that worked:
+
+```
+constitution/     the always-loaded rules — short, and it stays short
+protocols/        the long form: one file per concern, with the incidents attached
+brand/            voice and style as a loadable standard
+skills/           repeatable task playbooks
+```
+
+The constitution is **symlinked** into the AI tool's config directory rather than copied, so
+there is exactly one source of truth and editing it is a normal commit with history.
+
+**Every rule is anchored to the specific incident that produced it.** Not "verify API
+responses" but "a 200 meant nothing three times, here's each one." A bare rule gets
+re-litigated and eventually bent; a rule with its failure attached survives, because the
+cost of ignoring it is right there.
+
+### Two tiers, with an explicit promotion bar
+
+Learnings sort into exactly two places, and the sorting rule matters more than it sounds:
+
+| tier | holds | example |
+|---|---|---|
+| **project memory** | this system's state, vendor quirks, who's who, what's half-built | "the public form endpoint drops private lists" |
+| **global protocols** | how to work, regardless of tool | "a success response is not evidence of effect" |
+
+**The bar for promotion: would this change how I work on an unrelated project with different
+tools?** If no, it stays in project memory.
+
+This is the bit that keeps the constitution useful. What kills a document like this is
+entries that are really project notes wearing a principle's clothing — they accumulate, the
+file gets long, and people stop reading it. We deliberately left tool-specific findings
+(operator names, API quirks, which endpoint 404s) in project memory and promoted only four
+things from an entire migration.
+
+### An autonomy ladder
+
+Write down, once, what may act without asking and what must be drafted for review. Ours
+splits roughly:
+
+- **act freely** — diagnostics, reads, tests, refactors, structure, internal docs
+- **draft, don't send** — anything leaving the organisation, anything in a person's name
+- **never without explicit confirmation** — deletes with no undo, provisioning or revoking
+  access, anything touching another system's identifiers
+
+Two refinements that came out of real incidents:
+
+- **Confirmation is per-action and doesn't carry forward.** A yes to one cleanup is not a yes
+  to the next one. Terse approvals ("great", "yes", "go ahead") are not green lights for
+  destructive or outward-facing work — restate the scope and confirm.
+- **A source-integrity gate on anything unattended.** Before an automated job publishes,
+  confirm every input actually resolved. If a source failed or came back empty, the run
+  **downgrades to a draft that names the missing source**. An empty result is not evidence
+  that nothing happened.
+
+### Hard caps, enforced in code
+
+"Prefer", "generally", "lean toward" get bent every time. Use **HARD CAP / NO EXCEPTIONS**,
+and enforce the same limit in the code, not only in the instructions.
+
+Specifically: **never write a discretion carve-out.** "Unless it's a standout case" is the
+phrase that gets exploited.
+
+A worked example from this migration — our test-enrolment script refuses any address without
+a `+` alias, with no override flag at all. Since a mis-fire permanently burns someone's
+one-time journey enrolment, we wanted that mistake to be *impossible*, not discouraged.
+
+### Decision records: date, verbatim words, and the triggering incident
+
+Every non-obvious decision gets written down with **when**, **what was actually said**, and
+**what went wrong that forced the decision**. Convert "next week" and "by Friday" to absolute
+dates, because you will read this in six months.
+
+Record **corrections as corrections** — what was believed, who corrected it, when. And record
+**verified negatives**: "there is no such setting, I checked X, Y and Z" saves the next
+session an hour and stops the same dead end being re-explored.
+
+### Assume a parallel session
+
+If more than one conversation can touch the same project — and on a migration this size,
+several will — then:
+
+- re-query state before asserting it; "I checked" has a timestamp
+- read the log before writing a shared file, and never commit everything blindly
+- a decision that lives only in a chat transcript **is not recorded**
+
+We lost real time to two sessions holding different beliefs about what was deployed. A
+shared, committed handoff document between workstreams fixed it; chat did not.
+
+### Voice as a versioned standard, not a per-task instruction
+
+Ours lives as one canonical file describing how the organisation sounds, what gets a draft
+rejected, and which register each channel takes — with channel-specific playbooks (newsletter,
+social, community announcement) that handle structure and defer to it for voice.
+
+It's loaded *before* drafting anything outward-facing, and it gets updated when a draft gets
+rejected for a reason that isn't yet written down. That last part is what makes it improve
+rather than ossify: a rejection is a bug report against the standard.
+
+The migration-relevant point: the same discipline that keeps your contact-property names from
+drifting keeps your copy from drifting. Both are a register that someone has to own.
+
+### What this actually bought us
+
+On cutover day, six real bugs surfaced. Five were invisible to unit and plan-level tests, and
+all six were caught and fixed before they reached a member — because the protocols said to
+execute the real path, read back every write, and distrust a clean-looking answer from a
+throwaway check.
+
+The scaffolding isn't overhead on a project like this. It's the thing that makes a months-long
+migration across parallel workstreams converge instead of drift.
 
 ---
 
